@@ -22,6 +22,7 @@ import time
 import attr
 
 from synapse.api.constants import Membership
+from binascii import unhexlify
 
 from tests.server import make_request, render
 
@@ -151,6 +152,33 @@ class RestHelper(object):
 
         request, channel = make_request(
             self.hs.get_reactor(), "PUT", path, json.dumps(body).encode("utf8")
+        )
+        render(request, self.resource, self.hs.get_reactor())
+
+        assert int(channel.result["code"]) == expect_code, (
+            "Expected: %d, got: %d, resp: %r"
+            % (expect_code, int(channel.result["code"]), channel.result["body"])
+        )
+
+        return channel.json_body
+
+    def upload_media(self, tok: str, filename: str = "test.png", expect_code: int = 200) -> dict:
+        """Upload a piece of test media to the media repo
+
+        Args:
+            tok: The user token to use during the upload
+            filename: The filename of the media to be uploaded
+            expect_code: The return code to expect from attempting to upload the media
+        """
+        # small png
+        image_data = unhexlify(
+            b"89504e470d0a1a0a0000000d4948445200000001000000010806"
+            b"0000001f15c4890000000a49444154789c63000100000500010d"
+            b"0a2db40000000049454e44ae426082"
+        )
+        path = "/_matrix/media/r0/upload?filename=%s?access_token=%s" % (filename, tok)
+        request, channel = make_request(
+            self.hs.get_reactor(), "POST", path, content=image_data, access_token=self.acc
         )
         render(request, self.resource, self.hs.get_reactor())
 

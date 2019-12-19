@@ -643,3 +643,84 @@ class PurgeRoomTestCase(unittest.HomeserverTestCase):
             self.assertEqual(count, 0, msg="Rows not purged in {}".format(table))
 
     test_purge_room.skip = "Disabled because it's currently broken"
+
+
+class QuarantineMediaTestCase(unittest.HomeserverTestCase):
+    """Test /quarantine_media admin API.
+    """
+    servlets = [
+        synapse.rest.admin.register_servlets,
+        login.register_servlets,
+        room.register_servlets,
+    ]
+
+    def prepare(self, reactor, clock, hs):
+        self.store = hs.get_datastore()
+
+        self.admin_user = self.register_user("admin", "pass", admin=True)
+        self.admin_user_tok = self.login("admin", "pass")
+
+    def test_quarantine_media_in_room(self):
+        room_id = self.helper.create_room_as(self.admin_user, tok=self.admin_user_tok)
+
+        # Upload some media into the room
+        self.helper.upload_media(room_id, tok=self.admin_user_tok)
+
+        url = "/_synapse/admin/v1/purge_room"
+        request, channel = self.make_request(
+            "POST",
+            url.encode("ascii"),
+            {"room_id": room_id},
+            access_token=self.admin_user_tok,
+        )
+        self.render(request)
+
+        self.assertEqual(200, int(channel.result["code"]), msg=channel.result["body"])
+
+        # Test that the following tables have been purged of all rows related to the room.
+        for table in (
+            "current_state_events",
+            "event_backward_extremities",
+            "event_forward_extremities",
+            "event_json",
+            "event_push_actions",
+            "event_search",
+            "events",
+            "group_rooms",
+            "public_room_list_stream",
+            "receipts_graph",
+            "receipts_linearized",
+            "room_aliases",
+            "room_depth",
+            "room_memberships",
+            "room_stats_state",
+            "room_stats_current",
+            "room_stats_historical",
+            "room_stats_earliest_token",
+            "rooms",
+            "stream_ordering_to_exterm",
+            "users_in_public_rooms",
+            "users_who_share_private_rooms",
+            "appservice_room_list",
+            "e2e_room_keys",
+            "event_push_summary",
+            "pusher_throttle",
+            "group_summary_rooms",
+            "local_invites",
+            "room_account_data",
+            "room_tags",
+            "state_groups",
+            "state_groups_state",
+        ):
+            count = self.get_success(
+                self.store.db.simple_select_one_onecol(
+                    table=table,
+                    keyvalues={"room_id": room_id},
+                    retcol="COUNT(*)",
+                    desc="test_purge_room",
+                )
+            )
+
+            self.assertEqual(count, 0, msg="Rows not purged in {}".format(table))
+
+    test_purge_room.skip = "Disabled because it's currently broken"
