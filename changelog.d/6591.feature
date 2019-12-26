@@ -1,0 +1,1 @@
+New 'synctl status' command argument to check running synapse processes and listening ports.
